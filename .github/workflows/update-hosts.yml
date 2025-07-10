@@ -1,0 +1,29 @@
+name: Update Hosts List
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get install -y curl grep sed sort
+
+    - name: Generate hosts file
+      run: |
+        chmod +x scripts/generate_hosts.sh
+        ./scripts/generate_hosts.sh
+
+    - name: Commit and push changes
+      uses: stefanzweifel/git-auto-commit-action@v4
+      with:
+        commit_message: "chore: update merged hosts list"
+        file_pattern: "output/hosts.txt"
+        branch: main
