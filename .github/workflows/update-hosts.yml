@@ -1,5 +1,9 @@
 name: Update Hosts List
 
+# 允许写入仓库，以便自动提交生成文件
+permissions:
+  contents: write
+
 on:
   schedule:
     - cron: '0 0 * * *'      # 每日 UTC 00:00 运行
@@ -7,14 +11,19 @@ on:
 
 jobs:
   build:
+    # 继承作业级权限，如果需要也可在这里单独定义
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Generate hosts file
+    - name: List workspace files for debugging
+      run: ls -R .
+
+    - name: Run generate_hosts.sh with debug
       run: |
+        set -x           # 打印命令执行过程
         chmod +x scripts/generate_hosts.sh
         ./scripts/generate_hosts.sh
 
