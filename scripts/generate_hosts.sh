@@ -13,14 +13,39 @@ trap "rm -rf $TMPDIR" EXIT
 curl -fsSL "$URL1" -o "$TMPDIR/list1.txt"
 curl -fsSL "$URL2" -o "$TMPDIR/list2.txt"
 
-# 合并、去重、过滤注释与空行
+# 合并、去重：剔除注释与空行
 cat "$TMPDIR/list1.txt" "$TMPDIR/list2.txt" \
   | sed '/^\s*#/d;/^\s*$/d' \
-  | sed 's/^\*\.?//g' \
+  | sed '/^!/d' \
   | sort -u \
   > "$TMPDIR/merged.txt"
 
-# 生成 hosts 格式
+# 提取域名规则
+extract_domain() {
+  local line="$1"
+  if [[ "$line" =~ ^\|\|([^\^]+)\^ ]]; then
+    echo "${BASH_REMATCH[1]}"
+  elif [[ "$line" =~ ^@@\|\|([^\^]+)\^ ]]; then
+    echo "${BASH_REMATCH[1]}"
+  elif [[ "$line" =~ ^\*\.(.+) ]]; then
+    echo "*.${BASH_REMATCH[1]}"
+  elif [[ "$line" =~ ^([A-Za-z0-9.-]+)$ ]]; then
+    echo "${BASH_REMATCH[1]}"
+  fi
+}
+
+# 生成纯域名列表
+DOMAINS_FILE="$TMPDIR/domains.txt"
+> "$DOMAINS_FILE"
+while read -r rule; do
+  domain=$(extract_domain "$rule" || true)
+  [[ -n "$domain" ]] && echo "$domain" >> "$DOMAINS_FILE"
+done < "$TMPDIR/merged.txt"
+
+# 最终去重排序
+sort -u "$DOMAINS_FILE" > "$TMPDIR/final_domains.txt"
+
+# 输出 hosts 格式
 OUTDIR="output"
 mkdir -p "$OUTDIR"
 {
@@ -28,5 +53,5 @@ mkdir -p "$OUTDIR"
   echo "# Sources: $URL1 , $URL2"
   while read -r domain; do
     echo "0.0.0.0 $domain"
-  done < "$TMPDIR/merged.txt"
+  done < "$TMPDIR/final_domains.txt"
 } > "$OUTDIR/hosts.txt"
