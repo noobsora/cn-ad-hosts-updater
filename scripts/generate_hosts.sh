@@ -1,24 +1,31 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 源订阅地址
-URL1="https://raw.githubusercontent.com/Cats-Team/AdRules/main/dns.txt"
-URL2="https://anti-ad.net/adguard.txt"
+# 所有源地址
+URLS=(
+  "https://raw.githubusercontent.com/Cats-Team/AdRules/main/dns.txt"
+  "https://anti-ad.net/adguard.txt"
+  "https://raw.githubusercontent.com/AdguardTeam/HostlistsRegistry/refs/heads/main/filters/general/filter_53_AWAvenueAdsRule/filter.txt"
+  "https://raw.githubusercontent.com/AdguardTeam/HostlistsRegistry/refs/heads/main/filters/general/filter_48_HageziMultiPro/filter.txt"
+  "https://raw.githubusercontent.com/AdguardTeam/HostlistsRegistry/refs/heads/main/filters/general/filter_1_DnsFilter/filter.txt"
+  "https://raw.githubusercontent.com/AdguardTeam/HostlistsRegistry/refs/heads/main/filters/general/filter_59_DnsPopupsFilter/filter.txt"
+  "https://raw.githubusercontent.com/AdguardTeam/HostlistsRegistry/refs/heads/main/filters/other/filter_7_SmartTVBlocklist/filter.txt"
+)
 
-# 临时下载目录
+# 创建临时目录
 TMPDIR=$(mktemp -d)
 trap "rm -rf $TMPDIR" EXIT
 
-# 下载两个列表
-curl -fsSL "$URL1" -o "$TMPDIR/list1.txt"
-curl -fsSL "$URL2" -o "$TMPDIR/list2.txt"
+# 下载并合并所有源文件
+MERGED="$TMPDIR/merged.txt"
+> "$MERGED"
+for url in "${URLS[@]}"; do
+  echo "Downloading: $url"
+  curl -fsSL "$url" | sed '/^\s*#/d;/^\s*$/d;/^!/d' >> "$MERGED"
+done
 
-# 合并、去重：剔除注释与空行
-cat "$TMPDIR/list1.txt" "$TMPDIR/list2.txt" \
-  | sed '/^\s*#/d;/^\s*$/d' \
-  | sed '/^!/d' \
-  | sort -u \
-  > "$TMPDIR/merged.txt"
+# 去重
+sort -u "$MERGED" > "$TMPDIR/cleaned.txt"
 
 # 提取域名规则
 extract_domain() {
@@ -34,23 +41,27 @@ extract_domain() {
   fi
 }
 
-# 生成纯域名列表
+# 提取域名列表
 DOMAINS_FILE="$TMPDIR/domains.txt"
 > "$DOMAINS_FILE"
 while read -r rule; do
   domain=$(extract_domain "$rule" || true)
   [[ -n "$domain" ]] && echo "$domain" >> "$DOMAINS_FILE"
-done < "$TMPDIR/merged.txt"
+done < "$TMPDIR/cleaned.txt"
 
-# 最终去重排序
+# 去重并排序
 sort -u "$DOMAINS_FILE" > "$TMPDIR/final_domains.txt"
 
-# 输出 hosts 格式
+# 统计数量
+DOMAIN_COUNT=$(wc -l < "$TMPDIR/final_domains.txt")
+
+# 输出 hosts 文件
 OUTDIR="output"
 mkdir -p "$OUTDIR"
 {
   echo "# Merged hosts list generated on $(date -u +'%Y-%m-%dT%H:%M:%SZ') UTC"
-  echo "# Sources: $URL1 , $URL2"
+  printf "# Sources: %s\n" "${URLS[@]}"
+  echo "# Total domains: $DOMAIN_COUNT"
   while read -r domain; do
     echo "0.0.0.0 $domain"
   done < "$TMPDIR/final_domains.txt"
