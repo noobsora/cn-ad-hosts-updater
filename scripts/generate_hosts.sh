@@ -27,17 +27,19 @@ done
 # 去重
 sort -u "$MERGED" > "$TMPDIR/cleaned.txt"
 
-# 提取域名规则
+# 提取域名规则（包括保守处理的正则表达式）
 extract_domain() {
   local line="$1"
-  if [[ "$line" =~ ^\|\|([^\^]+)\^ ]]; then
+  if [[ "$line" =~ ^\|\|([^\^/]+)\^$ ]]; then
     echo "${BASH_REMATCH[1]}"
-  elif [[ "$line" =~ ^@@\|\|([^\^]+)\^ ]]; then
+  elif [[ "$line" =~ ^@@\|\|([^\^/]+)\^$ ]]; then
     echo "${BASH_REMATCH[1]}"
   elif [[ "$line" =~ ^\*\.(.+) ]]; then
     echo "*.${BASH_REMATCH[1]}"
   elif [[ "$line" =~ ^([A-Za-z0-9.-]+)$ ]]; then
     echo "${BASH_REMATCH[1]}"
+  elif [[ "$line" =~ ^/\\\.\*\\\.(.+)\\/$ ]]; then
+    echo "*.${BASH_REMATCH[1]}"
   fi
 }
 
@@ -46,7 +48,7 @@ DOMAINS_FILE="$TMPDIR/domains.txt"
 > "$DOMAINS_FILE"
 while read -r rule; do
   domain=$(extract_domain "$rule" || true)
-  [[ -n "$domain" ]] && echo "$domain" >> "$DOMAINS_FILE"
+  [[ -n "${domain:-}" ]] && echo "$domain" >> "$DOMAINS_FILE"
 done < "$TMPDIR/cleaned.txt"
 
 # 去重并排序
